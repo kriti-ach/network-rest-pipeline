@@ -1,0 +1,46 @@
+[project]
+name = "network-rest-pipeline"
+version = "0.1.0"
+description = "This project contains  scripts to preprocess the R01 Network resting-state data"
+readme = "README.md"
+authors = [
+    { name = "Kriti Achyutuni", email = "kritiach@stanford.edu" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.2.3",
+    "pandas>=2.2.3",
+    "matplotlib>=3.10.0",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.5",
+    "ipython>=8.32.0",
+    "python-dotenv>=1.0.1",
+    "pytest>=8.3.4",
+]
+
+[project.scripts]
+network-rest-pipeline = "network-rest-pipeline:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+extend-include = ["*.ipynb"]
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.ruff.lint]
+extend-select = ["E501", "W", "N", "R", "I"]
+
+[tool.pytest.ini_options]
+testpaths=['tests']
+
+[tool.pyright]
+exclude = ['.venv']
+venvPath = '.'
+venv = '.venv'
