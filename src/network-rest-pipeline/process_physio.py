@@ -7,55 +7,12 @@ from pathlib import Path
 import flywheel
 from flywheel import ApiException
 
-from network_rest_pipeline.config import (
-    FLYWHEEL_PROJECT,
-    PHYSIO_FILE_PATTERNS,
-    SUBJECT_ALIASES,
-    OUTPUT_DIR
+from .config import FLYWHEEL_PROJECT, OUTPUT_DIR
+from .utils.flywheel_utils import (
+    find_physio_files,
 )
-
-
-def normalize_subject_id(subject_id: str) -> str:
-    """Normalize subject ID using aliases."""
-    return SUBJECT_ALIASES.get(subject_id, subject_id)
-
-
-def find_physio_files(analysis: flywheel.Analysis) -> bool:
-    """Check if analysis contains any physio files."""
-    if not analysis.files:
-        return False
-
-    # Get file names (case-insensitive comparison)
-    analysis_files_lower = {f.name.lower() for f in analysis.files}
-    for pattern in PHYSIO_FILE_PATTERNS:
-        if pattern.lower() in analysis_files_lower:
-            return True
-    return False
-
-
-def get_flywheel_client() -> flywheel.Client:
-    """Initialize and return Flywheel client."""
-    # Try to get API key from environment variable
-    api_key = None
-    try:
-        import os
-
-        api_key = os.environ.get('FLYWHEEL_API_KEY')
-        if not api_key:
-            raise ValueError(
-                'FLYWHEEL_API_KEY environment variable not set. '
-                'Please set it before running this script.'
-            )
-    except ImportError:
-        pass
-
-    if not api_key:
-        raise ValueError(
-            'FLYWHEEL_API_KEY environment variable not set. '
-            'Please set it before running this script.'
-        )
-
-    return flywheel.Client(api_key)
+from .utils.subject_utils import normalize_subject_id
+from .utils.flywheel_utils import get_flywheel_client
 
 
 def process_physio_data(output_csv: str = f'{OUTPUT_DIR}/physio_summary.csv') -> None:
