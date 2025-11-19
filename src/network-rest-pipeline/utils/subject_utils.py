@@ -50,8 +50,5 @@ def get_valid_subjects() -> set[str]:
     validation_subs = load_subjects_from_file(VALIDATION_SUBS_FILE)
     discovery_subs = load_subjects_from_file(DISCOVERY_SUBS_FILE)
     
-    print(f"Loaded {len(validation_subs)} subjects from validation file")
-    print(f"Loaded {len(discovery_subs)} subjects from discovery file")
-    
     # return all subjects that are in both files
     return validation_subs | discovery_subs

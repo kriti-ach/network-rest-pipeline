@@ -31,9 +31,6 @@ def process_physio_data(output_csv: str = f'{OUTPUT_DIR}/physio_summary.csv') ->
 
         # Get valid subjects (in both validation and discovery files)
         valid_subjects = get_valid_subjects()
-        print(f'Valid subjects (in both files): {len(valid_subjects)}')
-        if valid_subjects:
-            print(f'Valid subject IDs: {sorted(valid_subjects)}\n')
 
         # Collect all subjects and their sessions
         # subject_id -> list of (session_id, session_label, has_physio, timestamp)
@@ -54,8 +51,16 @@ def process_physio_data(output_csv: str = f'{OUTPUT_DIR}/physio_summary.csv') ->
             print(f'Processing subject: {subject.code} (normalized: {normalized_id})')
 
             # Get all sessions for this subject
-            # subject.sessions is already a list
-            sessions = subject.sessions if isinstance(subject.sessions, list) else list(subject.sessions)
+            # subject.sessions is a Finder object - call it to get the list
+            try:
+                sessions = subject.sessions()
+            except (TypeError, AttributeError):
+                # Fallback: use client method
+                try:
+                    sessions = fw.get_subject_sessions(subject.id)
+                except Exception:
+                    print(f'Warning: Could not get sessions for subject {subject.code}')
+                    continue
 
             for session in sessions:
                 session_id = session.id
@@ -64,15 +69,15 @@ def process_physio_data(output_csv: str = f'{OUTPUT_DIR}/physio_summary.csv') ->
                 session_timestamp = getattr(session, 'timestamp', 0) or 0
 
                 # Check analyses in this session
-                # session.analyses is already a list
+                # session.analyses is a Finder object - call it to get the list
                 has_physio = False
                 try:
-                    analyses = session.analyses if isinstance(session.analyses, list) else list(session.analyses)
+                    analyses = session.analyses()
                     for analysis in analyses:
                         if find_physio_files(analysis):
                             has_physio = True
                             break
-                except (ApiException, AttributeError) as e:
+                except (ApiException, AttributeError, TypeError) as e:
                     print(
                         f'Warning: Could not get analyses for session {session_label}: {e}'
                     )
