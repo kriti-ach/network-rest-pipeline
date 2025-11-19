@@ -49,8 +49,6 @@ def process_physio_data(output_csv: str = f'{OUTPUT_DIR}/physio_summary.csv') ->
             if normalized_id not in valid_subjects:
                 continue
 
-            print(f'Processing subject: {subject.code} (normalized: {normalized_id})')
-
             # Get all sessions for this subject
             # subject.sessions is a Finder object - call it to get the list
             try:
@@ -80,9 +78,24 @@ def process_physio_data(output_csv: str = f'{OUTPUT_DIR}/physio_summary.csv') ->
                     else:
                         analyses = list(session.analyses)
                     
+                    # Debug: print number of analyses found
+                    num_analyses = len(analyses) if hasattr(analyses, '__len__') else 0
+                    if num_analyses > 0:
+                        print(f'  Found {num_analyses} analyses for session {session_label}')
+                    
                     for analysis in analyses:
+                        # Reload analysis to ensure files are loaded
+                        try:
+                            # Try to reload the analysis with files
+                            if hasattr(analysis, 'id'):
+                                analysis = fw.get_analysis(analysis.id)
+                        except (ApiException, AttributeError, TypeError):
+                            pass  # Continue with existing analysis object
+                        
                         if find_physio_files(analysis):
                             has_physio = True
+                            analysis_label = getattr(analysis, 'label', getattr(analysis, 'id', 'unknown'))
+                            print(f'  ✓ Found physio files in analysis {analysis_label}')
                             break
                 except (ApiException, AttributeError, TypeError) as e:
                     print(
