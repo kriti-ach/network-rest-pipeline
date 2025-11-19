@@ -1,6 +1,6 @@
 """Subject-related utility functions."""
 
-from pathlib import Path
+import os
 
 from config import DISCOVERY_SUBS_FILE, SUBJECT_ALIASES, VALIDATION_SUBS_FILE
 
@@ -20,23 +20,24 @@ def normalize_subject_id(subject_id: str) -> str:
     return SUBJECT_ALIASES.get(subject_id, subject_id)
 
 
-def load_subjects_from_file(file_path: str) -> set[str]:
-    """Load subject IDs from a text file.
+def load_subjects_from_file(filepath: str) -> set[str]:
+    """Read subject IDs from file.
 
     Args:
-        file_path: Path to the file containing subject IDs (one per line).
+        filepath: Path to the file containing subject IDs.
 
     Returns:
-        set[str]: Set of subject IDs from the file.
+        set[str]: Set of subject IDs.
     """
+    if not os.path.exists(filepath):
+        print(f"Warning: File not found: {filepath}")
+        return set()
     subjects = set()
-    path = Path(file_path)
-    if path.exists():
-        with path.open() as f:
-            for line in f:
-                subject_id = line.strip()
-                if subject_id:  # Skip empty lines
-                    subjects.add(subject_id)
+    with open(filepath, 'r') as f:
+        for line in f:
+            subject_id = line.strip()
+            if subject_id:  # Skip empty lines
+                subjects.add(subject_id)
     return subjects
 
 
@@ -48,5 +49,12 @@ def get_valid_subjects() -> set[str]:
     """
     validation_subs = load_subjects_from_file(VALIDATION_SUBS_FILE)
     discovery_subs = load_subjects_from_file(DISCOVERY_SUBS_FILE)
+    
+    print(f"Loaded {len(validation_subs)} subjects from validation file")
+    print(f"Loaded {len(discovery_subs)} subjects from discovery file")
+    
     # Return intersection - subjects in both files
-    return validation_subs & discovery_subs
+    valid_subs = validation_subs & discovery_subs
+    print(f"Found {len(valid_subs)} subjects in both files")
+    
+    return valid_subs
