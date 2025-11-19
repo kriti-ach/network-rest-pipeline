@@ -5,7 +5,7 @@ import os
 import flywheel
 from flywheel import ApiException
 
-from .config import PHYSIO_FILE_PATTERNS
+from config import PHYSIO_FILE_PATTERNS
 
 
 def get_flywheel_client() -> flywheel.Client:
