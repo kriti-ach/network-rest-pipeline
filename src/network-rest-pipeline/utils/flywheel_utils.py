@@ -7,26 +7,6 @@ from flywheel import ApiException
 
 from config import PHYSIO_FILE_PATTERNS
 
-
-def get_flywheel_client() -> flywheel.Client:
-    """Initialize and return Flywheel client.
-
-    Returns:
-        flywheel.Client: Initialized Flywheel client.
-
-    Raises:
-        ValueError: If FLYWHEEL_API_KEY environment variable is not set.
-    """
-    api_key = os.environ.get('FLYWHEEL_API_KEY')
-    if not api_key:
-        raise ValueError(
-            'FLYWHEEL_API_KEY environment variable not set. '
-            'Please set it before running this script.'
-        )
-
-    return flywheel.Client(api_key)
-
-
 def find_physio_files(analysis: flywheel.Analysis) -> bool:
     """Check if analysis contains any physio files.
 

@@ -8,7 +8,6 @@ import flywheel
 from flywheel import ApiException
 
 from utils.flywheel_utils import find_physio_files
-from utils.flywheel_utils import get_flywheel_client
 from utils.subject_utils import normalize_subject_id
 from config import FLYWHEEL_PROJECT, OUTPUT_DIR
 
@@ -17,35 +16,23 @@ def process_physio_data(output_csv: str = f'{OUTPUT_DIR}/physio_summary.csv') ->
     print(f'Connecting to Flywheel project: {FLYWHEEL_PROJECT}')
 
     try:
-        fw = get_flywheel_client()
+        fw = flywheel.Client()
     except ValueError as e:
         print(f'Error: {e}')
         return
 
     try:
-        project = fw.projects.find_first(f'label={FLYWHEEL_PROJECT}')
+        project = fw.lookup(FLYWHEEL_PROJECT)
         if not project:
             print(f'Error: Project "{FLYWHEEL_PROJECT}" not found')
             return
 
-        print(f'Found project: {project.label} ({project.id})')
+        print(f'Found project: {project.label}\n')
 
-        # Collect all subjects and their sessions
-        # subject_id -> list of (session_id, session_label, has_physio, timestamp)
-        subject_sessions: dict[str, list[tuple[str, str, bool, float]]] = (
-            defaultdict(list)
-        )
+        subjects = project.subjects()
+        print(f'Found {len(subjects)} subjects')
 
-        # Get all subjects in the project
-        # Handle both .iter() and direct iteration
-        try:
-            subjects = project.subjects.iter()
-        except AttributeError:
-            subjects = project.subjects()
-        subject_list = list(subjects)
-        print(f'Found {len(subject_list)} subjects')
-
-        for subject in subject_list:
+        for subject in subjects:
             normalized_id = normalize_subject_id(subject.code)
             print(f'Processing subject: {subject.code} (normalized: {normalized_id})')
 

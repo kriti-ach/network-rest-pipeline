@@ -1,7 +1,7 @@
 """Configuration for Flywheel project and subject mappings."""
 
 # Flywheel project name
-FLYWHEEL_PROJECT = 'r01network'
+FLYWHEEL_PROJECT = 'russpold/r01network'
 OUTPUT_DIR = '/oak/stanford/groups/russpold/data/network_grant/rest_pipeline_outputs/'
 
 # Special subject mappings (e.g., s29-2 should be counted as s29)
