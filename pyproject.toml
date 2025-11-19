@@ -49,3 +49,7 @@ testpaths=['tests']
 exclude = ['.venv']
 venvPath = '.'
 venv = '.venv'
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["network-rest-pipeline"]
