@@ -1,6 +1,6 @@
 """Subject-related utility functions."""
 
-from ..config import SUBJECT_ALIASES
+from .config import SUBJECT_ALIASES
 
 
 def normalize_subject_id(subject_id: str) -> str:
