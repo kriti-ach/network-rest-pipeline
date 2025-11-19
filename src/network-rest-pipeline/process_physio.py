@@ -1,0 +1,192 @@
+"""Process physio data from Flywheel and create a summary CSV."""
+
+import csv
+from collections import defaultdict
+from pathlib import Path
+
+import flywheel
+from flywheel import ApiException
+
+from network_rest_pipeline.config import (
+    FLYWHEEL_PROJECT,
+    PHYSIO_FILE_PATTERNS,
+    SUBJECT_ALIASES,
+    OUTPUT_DIR
+)
+
+
+def normalize_subject_id(subject_id: str) -> str:
+    """Normalize subject ID using aliases."""
+    return SUBJECT_ALIASES.get(subject_id, subject_id)
+
+
+def find_physio_files(analysis: flywheel.Analysis) -> bool:
+    """Check if analysis contains any physio files."""
+    if not analysis.files:
+        return False
+
+    # Get file names (case-insensitive comparison)
+    analysis_files_lower = {f.name.lower() for f in analysis.files}
+    for pattern in PHYSIO_FILE_PATTERNS:
+        if pattern.lower() in analysis_files_lower:
+            return True
+    return False
+
+
+def get_flywheel_client() -> flywheel.Client:
+    """Initialize and return Flywheel client."""
+    # Try to get API key from environment variable
+    api_key = None
+    try:
+        import os
+
+        api_key = os.environ.get('FLYWHEEL_API_KEY')
+        if not api_key:
+            raise ValueError(
+                'FLYWHEEL_API_KEY environment variable not set. '
+                'Please set it before running this script.'
+            )
+    except ImportError:
+        pass
+
+    if not api_key:
+        raise ValueError(
+            'FLYWHEEL_API_KEY environment variable not set. '
+            'Please set it before running this script.'
+        )
+
+    return flywheel.Client(api_key)
+
+
+def process_physio_data(output_csv: str = f'{OUTPUT_DIR}/physio_summary.csv') -> None:
+    """Process physio data from Flywheel and create summary CSV."""
+    print(f'Connecting to Flywheel project: {FLYWHEEL_PROJECT}')
+
+    try:
+        fw = get_flywheel_client()
+    except ValueError as e:
+        print(f'Error: {e}')
+        return
+
+    try:
+        project = fw.projects.find_first(f'label={FLYWHEEL_PROJECT}')
+        if not project:
+            print(f'Error: Project "{FLYWHEEL_PROJECT}" not found')
+            return
+
+        print(f'Found project: {project.label} ({project.id})')
+
+        # Collect all subjects and their sessions
+        # subject_id -> list of (session_id, session_label, has_physio, timestamp)
+        subject_sessions: dict[str, list[tuple[str, str, bool, float]]] = (
+            defaultdict(list)
+        )
+
+        # Get all subjects in the project
+        # Handle both .iter() and direct iteration
+        try:
+            subjects = project.subjects.iter()
+        except AttributeError:
+            subjects = project.subjects()
+        subject_list = list(subjects)
+        print(f'Found {len(subject_list)} subjects')
+
+        for subject in subject_list:
+            normalized_id = normalize_subject_id(subject.code)
+            print(f'Processing subject: {subject.code} (normalized: {normalized_id})')
+
+            # Get all sessions for this subject
+            # Handle both .iter() and direct iteration
+            try:
+                sessions = subject.sessions.iter()
+            except AttributeError:
+                sessions = subject.sessions()
+            session_list = list(sessions)
+
+            for session in session_list:
+                session_id = session.id
+                session_label = session.label
+                # Use timestamp for sorting (default to 0 if not available)
+                session_timestamp = getattr(session, 'timestamp', 0) or 0
+
+                # Check analyses in this session
+                has_physio = False
+                try:
+                    # Handle both .iter() and direct iteration
+                    try:
+                        analyses = session.analyses.iter()
+                    except AttributeError:
+                        analyses = session.analyses()
+                    for analysis in analyses:
+                        if find_physio_files(analysis):
+                            has_physio = True
+                            break
+                except (ApiException, AttributeError) as e:
+                    print(
+                        f'Warning: Could not get analyses for session {session_label}: {e}'
+                    )
+
+                subject_sessions[normalized_id].append(
+                    (session_id, session_label, has_physio, session_timestamp)
+                )
+
+        # Sort sessions by timestamp to determine chronological order
+        # Then renumber them as ses-01, ses-02, etc.
+        output_data = []
+        for subject_id in sorted(subject_sessions.keys()):
+            sessions = subject_sessions[subject_id]
+
+            # Sort sessions by timestamp (earliest first)
+            # If timestamp is 0 or same, fall back to sorting by label
+            sessions_sorted = sorted(
+                sessions, key=lambda x: (x[3] if x[3] > 0 else float('inf'), x[1])
+            )
+
+            for idx, (session_id, original_label, has_physio, _) in enumerate(
+                sessions_sorted, start=1
+            ):
+                new_session_label = f'ses-{idx:02d}'
+                output_data.append(
+                    {
+                        'subject_id': subject_id,
+                        'session': new_session_label,
+                        'has_physio': has_physio,
+                        'original_session_label': original_label,
+                    }
+                )
+
+        # Write to CSV
+        output_path = Path(output_csv)
+        with output_path.open('w', newline='') as f:
+            if output_data:
+                fieldnames = ['subject_id', 'session', 'has_physio']
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                for row in output_data:
+                    writer.writerow(
+                        {
+                            'subject_id': row['subject_id'],
+                            'session': row['session'],
+                            'has_physio': row['has_physio'],
+                        }
+                    )
+
+        print(f'\nSummary written to: {output_csv}')
+        print(f'Total subjects: {len(subject_sessions)}')
+        print(f'Total sessions: {len(output_data)}')
+        sessions_with_physio = sum(1 for row in output_data if row['has_physio'])
+        print(f'Sessions with physio: {sessions_with_physio}')
+
+    except ApiException as e:
+        print(f'Flywheel API error: {e}')
+    except Exception as e:
+        print(f'Unexpected error: {e}')
+        raise
+
+
+if __name__ == '__main__':
+    import sys
+
+    output_file = sys.argv[1] if len(sys.argv) > 1 else f'{OUTPUT_DIR}/physio_summary.csv'
+    process_physio_data(output_file)
+
