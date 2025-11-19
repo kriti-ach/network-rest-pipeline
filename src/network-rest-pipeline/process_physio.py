@@ -8,7 +8,7 @@ import flywheel
 from flywheel import ApiException
 
 from utils.flywheel_utils import find_physio_files
-from utils.subject_utils import normalize_subject_id
+from utils.subject_utils import get_valid_subjects, normalize_subject_id
 from config import FLYWHEEL_PROJECT, OUTPUT_DIR
 
 def process_physio_data(output_csv: str = f'{OUTPUT_DIR}/physio_summary.csv') -> None:
@@ -29,35 +29,45 @@ def process_physio_data(output_csv: str = f'{OUTPUT_DIR}/physio_summary.csv') ->
 
         print(f'Found project: {project.label}\n')
 
-        subjects = project.subjects()
-        print(f'Found {len(subjects)} subjects')
+        # Get valid subjects (in both validation and discovery files)
+        valid_subjects = get_valid_subjects()
+        print(f'Valid subjects (in both files): {len(valid_subjects)}')
+        if valid_subjects:
+            print(f'Valid subject IDs: {sorted(valid_subjects)}\n')
 
-        for subject in subjects:
+        # Collect all subjects and their sessions
+        # subject_id -> list of (session_id, session_label, has_physio, timestamp)
+        subject_sessions: dict[str, list[tuple[str, str, bool, float]]] = (
+            defaultdict(list)
+        )
+
+        all_subjects = project.subjects()
+        print(f'Total subjects in project: {len(all_subjects)}')
+
+        for subject in all_subjects:
             normalized_id = normalize_subject_id(subject.code)
+
+            # Only process subjects that are in both validation and discovery files
+            if normalized_id not in valid_subjects:
+                continue
+
             print(f'Processing subject: {subject.code} (normalized: {normalized_id})')
 
             # Get all sessions for this subject
-            # Handle both .iter() and direct iteration
-            try:
-                sessions = subject.sessions.iter()
-            except AttributeError:
-                sessions = subject.sessions()
-            session_list = list(sessions)
+            # subject.sessions is already a list
+            sessions = subject.sessions if isinstance(subject.sessions, list) else list(subject.sessions)
 
-            for session in session_list:
+            for session in sessions:
                 session_id = session.id
                 session_label = session.label
                 # Use timestamp for sorting (default to 0 if not available)
                 session_timestamp = getattr(session, 'timestamp', 0) or 0
 
                 # Check analyses in this session
+                # session.analyses is already a list
                 has_physio = False
                 try:
-                    # Handle both .iter() and direct iteration
-                    try:
-                        analyses = session.analyses.iter()
-                    except AttributeError:
-                        analyses = session.analyses()
+                    analyses = session.analyses if isinstance(session.analyses, list) else list(session.analyses)
                     for analysis in analyses:
                         if find_physio_files(analysis):
                             has_physio = True
