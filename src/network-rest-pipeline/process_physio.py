@@ -34,7 +34,8 @@ def process_physio_data(output_csv: str = f'{OUTPUT_DIR}/physio_summary.csv') ->
 
         # Collect all subjects and their sessions
         # subject_id -> list of (session_id, session_label, has_physio, timestamp)
-        subject_sessions: dict[str, list[tuple[str, str, bool, float]]] = (
+        # timestamp can be datetime.datetime or None
+        subject_sessions: dict[str, list[tuple[str, str, bool, object]]] = (
             defaultdict(list)
         )
 
@@ -65,14 +66,20 @@ def process_physio_data(output_csv: str = f'{OUTPUT_DIR}/physio_summary.csv') ->
             for session in sessions:
                 session_id = session.id
                 session_label = session.label
-                # Use timestamp for sorting (default to 0 if not available)
-                session_timestamp = getattr(session, 'timestamp', 0) or 0
+                # Get timestamp for sorting (could be datetime or None)
+                session_timestamp = getattr(session, 'timestamp', None)
 
                 # Check analyses in this session
-                # session.analyses is a Finder object - call it to get the list
+                # session.analyses might be a list or a Finder object
                 has_physio = False
                 try:
-                    analyses = session.analyses()
+                    if isinstance(session.analyses, list):
+                        analyses = session.analyses
+                    elif callable(session.analyses):
+                        analyses = session.analyses()
+                    else:
+                        analyses = list(session.analyses)
+                    
                     for analysis in analyses:
                         if find_physio_files(analysis):
                             has_physio = True
@@ -93,10 +100,15 @@ def process_physio_data(output_csv: str = f'{OUTPUT_DIR}/physio_summary.csv') ->
             sessions = subject_sessions[subject_id]
 
             # Sort sessions by timestamp (earliest first)
-            # If timestamp is 0 or same, fall back to sorting by label
-            sessions_sorted = sorted(
-                sessions, key=lambda x: (x[3] if x[3] > 0 else float('inf'), x[1])
-            )
+            # Handle datetime objects and None values
+            def sort_key(session_tuple):
+                timestamp = session_tuple[3]
+                if timestamp is None:
+                    return (float('inf'), session_tuple[1])  # No timestamp, sort by label
+                # datetime objects are directly comparable
+                return (timestamp, session_tuple[1])
+            
+            sessions_sorted = sorted(sessions, key=sort_key)
 
             for idx, (session_id, original_label, has_physio, _) in enumerate(
                 sessions_sorted, start=1
