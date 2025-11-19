@@ -7,13 +7,10 @@ from pathlib import Path
 import flywheel
 from flywheel import ApiException
 
-from .config import FLYWHEEL_PROJECT, OUTPUT_DIR
-from .utils.flywheel_utils import (
-    find_physio_files,
-)
-from .utils.subject_utils import normalize_subject_id
-from .utils.flywheel_utils import get_flywheel_client
-
+from utils.flywheel_utils import find_physio_files
+from utils.flywheel_utils import get_flywheel_client
+from utils.subject_utils import normalize_subject_id
+from config import FLYWHEEL_PROJECT, OUTPUT_DIR
 
 def process_physio_data(output_csv: str = f'{OUTPUT_DIR}/physio_summary.csv') -> None:
     """Process physio data from Flywheel and create summary CSV."""
