@@ -64,47 +64,40 @@ def process_physio_data(output_csv: str = f'{OUTPUT_DIR}/physio_summary.csv') ->
             for session in sessions:
                 session_id = session.id
                 session_label = session.label
-                # Get timestamp for sorting (could be datetime or None)
                 session_timestamp = getattr(session, 'timestamp', None)
 
-                # Check analyses in this session
-                # session.analyses might be a list or a Finder object
                 has_physio = False
-                try:
-                    if isinstance(session.analyses, list):
-                        analyses = session.analyses
-                    elif callable(session.analyses):
-                        analyses = session.analyses()
-                    else:
-                        analyses = list(session.analyses)
-                    
-                    # Debug: print number of analyses found
-                    num_analyses = len(analyses) if hasattr(analyses, '__len__') else 0
-                    if num_analyses > 0:
-                        print(f'  Found {num_analyses} analyses for session {session_label}')
-                    
-                    for analysis in analyses:
-                        # Reload analysis to ensure files are loaded
-                        try:
-                            # Try to reload the analysis with files
-                            if hasattr(analysis, 'id'):
-                                analysis = fw.get_analysis(analysis.id)
-                        except (ApiException, AttributeError, TypeError):
-                            pass  # Continue with existing analysis object
-                        
-                        if find_physio_files(analysis):
-                            has_physio = True
-                            analysis_label = getattr(analysis, 'label', getattr(analysis, 'id', 'unknown'))
-                            print(f'  ✓ Found physio files in analysis {analysis_label}')
-                            break
-                except (ApiException, AttributeError, TypeError) as e:
-                    print(
-                        f'Warning: Could not get analyses for session {session_label}: {e}'
-                    )
+                print(f"Checking session: {session_label} ({session_id})")
 
-                subject_sessions[normalized_id].append(
-                    (session_id, session_label, has_physio, session_timestamp)
-                )
+                try:
+                    # session.analyses is a "Finder", which is iterable. No need for complex checks.
+                    # We iterate through the lightweight analysis stubs first.
+                    for analysis_stub in session.analyses:
+                        try:
+                            # IMPORTANT: Reload the full analysis object to get file lists
+                            analysis = fw.get_analysis(analysis_stub.id)
+                            analysis_label = analysis.label
+
+                            # Use the corrected function to check for physio files
+                            if find_physio_files(analysis):
+                                has_physio = True
+                                print(f'  ✓ Found physio files in analysis: {analysis_label}')
+                                # We found what we need in this session, so break the inner loop
+                                break
+
+                        except flywheel.ApiException as e:
+                            # This can happen if an analysis is in a failed state or deleted
+                            print(f'  Warning: Could not fully load analysis {analysis_stub.id}: {e}')
+                            continue # Move to the next analysis
+                
+                except flywheel.ApiException as e:
+                    print(f'Warning: Could not get analyses for session {session_label}: {e}')
+
+                # This part of your logic remains the same
+                # subject_sessions[normalized_id].append(
+                #     (session_id, session_label, has_physio, session_timestamp)
+                # )
+                print(f"Session {session_label} summary: Has Physio = {has_physio}\n")
 
         # Sort sessions by timestamp to determine chronological order
         # Then renumber them as ses-01, ses-02, etc.
