@@ -29,12 +29,8 @@ def process_physio_data(output_csv: str = f'{OUTPUT_DIR}/physio_summary.csv') ->
 
         print(f'Found project: {project.label}\n')
 
-        # Get valid subjects (in both validation and discovery files)
+        # Get valid subjects
         valid_subjects = get_valid_subjects()
-
-        # Collect all subjects and their sessions
-        # subject_id -> list of (session_id, session_label, has_physio, timestamp)
-        # timestamp can be datetime.datetime or None
         subject_sessions: dict[str, list[tuple[str, str, bool, object]]] = (
             defaultdict(list)
         )
@@ -44,76 +40,75 @@ def process_physio_data(output_csv: str = f'{OUTPUT_DIR}/physio_summary.csv') ->
         for subject in all_subjects:
             normalized_id = normalize_subject_id(subject.code)
 
-            # Only process subjects that are in both validation and discovery files
             if normalized_id not in valid_subjects:
                 continue
 
-            # Get all sessions for this subject
-            # subject.sessions is a Finder object - call it to get the list
-            try:
-                sessions = subject.sessions()
-            except (TypeError, AttributeError):
-                # Fallback: use client method
-                try:
-                    sessions = fw.get_subject_sessions(subject.id)
-                except Exception:
-                    print(f'Warning: Could not get sessions for subject {subject.code}')
-                    continue
+            # Reload subject to get full data
+            subject = fw.get(subject.id)
+            
+            # Get sessions - use reload to ensure we have full session data
+            sessions = fw.get_subject_sessions(subject.id)
 
             for session in sessions:
+                # Reload the session to get full data including analyses
+                session = fw.get(session.id)
+                
                 session_id = session.id
                 session_label = session.label
-                print(f"Session id: {session_id}, Session label: {session_label}")
+                print(f"Checking session: {session_label} ({session_id})")
                 session_timestamp = getattr(session, 'timestamp', None)
 
                 has_physio = False
-                print(f"Checking session: {session_label} ({session_id})")
 
-                try:
-                    # session.analyses is a "Finder", which is iterable. No need for complex checks.
-                    # We iterate through the lightweight analysis stubs first.
-                    if session.analyses:
-                        print(f"Session {session_label} has {len(session.analyses)} analyses")
-                    for analysis_stub in session.analyses:
-                        try:
-                            # IMPORTANT: Reload the full analysis object to get file lists
-                            analysis = fw.get_analysis(analysis_stub.id)
-                            analysis_label = analysis.label
-
-                            # Use the corrected function to check for physio files
-                            if find_physio_files(analysis):
-                                has_physio = True
-                                print(f'  ✓ Found physio files in analysis: {analysis_label}')
-                                # We found what we need in this session, so break the inner loop
-                                break
-
-                        except flywheel.ApiException as e:
-                            # This can happen if an analysis is in a failed state or deleted
-                            print(f'  Warning: Could not fully load analysis {analysis_stub.id}: {e}')
-                            continue # Move to the next analysis
+                # Get analyses for this session
+                analyses = fw.get_session_analyses(session_id)
                 
-                except flywheel.ApiException as e:
-                    print(f'Warning: Could not get analyses for session {session_label}: {e}')
+                if analyses:
+                    print(f"  Found {len(analyses)} analyses")
+                    
+                    for analysis in analyses:
+                        # Reload analysis to get files
+                        analysis = fw.get_analysis(analysis.id)
+                        analysis_label = analysis.label
+                        
+                        print(f"  Checking analysis: {analysis_label}")
+                        
+                        # Check output files
+                        if hasattr(analysis, 'files') and analysis.files:
+                            print(f"    Found {len(analysis.files)} output files")
+                            for file in analysis.files:
+                                print(f"      - {file.name} (type: {file.type})")
+                                
+                                # Check if it's a physio-related CSV
+                                if file.name.endswith('.csv'):
+                                    # You can download and read the CSV if needed:
+                                    # csv_content = fw.download_file_from_analysis(analysis.id, file.name)
+                                    
+                                    # Or check the filename pattern
+                                    if 'FitData' in file.name or 'FitTrig' in file.name:
+                                        has_physio = True
+                                        print(f'    ✓ Found physio CSV: {file.name}')
+                                        break
+                        
+                        if has_physio:
+                            break
+                else:
+                    print(f"  No analyses found for session {session_label}")
 
-                # This part of your logic remains the same
-                # subject_sessions[normalized_id].append(
-                #     (session_id, session_label, has_physio, session_timestamp)
-                # )
-                print(f"Session {session_label} summary: Has Physio = {has_physio}\n")
+                subject_sessions[normalized_id].append(
+                    (session_id, session_label, has_physio, session_timestamp)
+                )
+                print(f"  Session summary: Has Physio = {has_physio}\n")
 
-        # Sort sessions by timestamp to determine chronological order
-        # Then renumber them as ses-01, ses-02, etc.
+        # [Rest of your code for sorting and writing CSV remains the same]
         output_data = []
         for subject_id in sorted(subject_sessions.keys()):
             sessions = subject_sessions[subject_id]
 
-            # Sort sessions by timestamp (earliest first)
-            # Handle datetime objects and None values
             def sort_key(session_tuple):
                 timestamp = session_tuple[3]
                 if timestamp is None:
-                    return (float('inf'), session_tuple[1])  # No timestamp, sort by label
-                # datetime objects are directly comparable
+                    return (float('inf'), session_tuple[1])
                 return (timestamp, session_tuple[1])
             
             sessions_sorted = sorted(sessions, key=sort_key)
