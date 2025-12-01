@@ -64,20 +64,13 @@ def process_physio_data(output_csv: str = f'{OUTPUT_DIR}/physio_summary.csv') ->
                 analyses = fw.get_session_analyses(session_id)
                 
                 if analyses:
-                    print(f"  Found {len(analyses)} analyses")
-                    
                     for analysis in analyses:
                         # Reload analysis to get files
                         analysis = fw.get_analysis(analysis.id)
-                        analysis_label = analysis.label
-                        
-                        print(f"  Checking analysis: {analysis_label}")
                         
                         # Check output files
                         if hasattr(analysis, 'files') and analysis.files:
-                            print(f"    Found {len(analysis.files)} output files")
                             for file in analysis.files:
-                                print(f"      - {file.name} (type: {file.type})")
                                 
                                 # Check if it's a physio-related CSV
                                 if file.name.endswith('.csv'):
@@ -85,9 +78,8 @@ def process_physio_data(output_csv: str = f'{OUTPUT_DIR}/physio_summary.csv') ->
                                     # csv_content = fw.download_file_from_analysis(analysis.id, file.name)
                                     
                                     # Or check the filename pattern
-                                    if 'FitData' in file.name or 'FitTrig' in file.name:
+                                    if 'FltData' in file.name or 'FltTrig' in file.name:
                                         has_physio = True
-                                        print(f'    ✓ Found physio CSV: {file.name}')
                                         break
                         
                         if has_physio:
