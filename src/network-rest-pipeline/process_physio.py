@@ -40,7 +40,6 @@ def process_physio_data(output_csv: str = f'{OUTPUT_DIR}/physio_summary.csv') ->
         )
 
         all_subjects = project.subjects()
-        print(f'Total subjects in project: {len(all_subjects)}')
 
         for subject in all_subjects:
             normalized_id = normalize_subject_id(subject.code)
@@ -64,6 +63,7 @@ def process_physio_data(output_csv: str = f'{OUTPUT_DIR}/physio_summary.csv') ->
             for session in sessions:
                 session_id = session.id
                 session_label = session.label
+                print(f"Session id: {session_id}, Session label: {session_label}")
                 session_timestamp = getattr(session, 'timestamp', None)
 
                 has_physio = False
@@ -72,6 +72,8 @@ def process_physio_data(output_csv: str = f'{OUTPUT_DIR}/physio_summary.csv') ->
                 try:
                     # session.analyses is a "Finder", which is iterable. No need for complex checks.
                     # We iterate through the lightweight analysis stubs first.
+                    if session.analyses:
+                        print(f"Session {session_label} has {len(session.analyses)} analyses")
                     for analysis_stub in session.analyses:
                         try:
                             # IMPORTANT: Reload the full analysis object to get file lists
